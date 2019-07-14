@@ -9,7 +9,7 @@ from jax import random
 class SentimentNet(nn.NeuralNet):
 
   def load_data(self):
-    with gzip.GzipFile('data/all_reviews10k.json.gz', 'r') as fp:
+    with gzip.GzipFile('data/50k_reviews10k.json.gz', 'r') as fp:
       topk, reviews = json.load(fp)
 
     # Remove 3 star reviews to simplify problem
@@ -45,10 +45,6 @@ class SentimentNet(nn.NeuralNet):
     return [.001 * random.normal(self.rnd_key, (self.vocab_size,)),
       np.zeros((1,))]
         
-  def predict(self, params, x):
-    y_ = self.forward(params, x)
-    return y_ > .5
-    
   def forward(self, params, x):
     W1, b1 = params
     # the [0] is to make sure we return a scalar.
@@ -58,11 +54,9 @@ class SentimentNet(nn.NeuralNet):
     y_ = self.forward(params, x)
     return nn.binary_cross_entropy_loss(y_, y)
 
-  def accuracy(self, y_, y):
-    return onehot_multi_categorical_accuracy(y_, y)
-
-  def accuracy(self, y_, y):
-    return nn.binary_categorical_accuracy(y_, y)
+  def eval_metrics(self, y_, y):
+    y_ = y_ > .5
+    return nn.binary_categorical_metrics(y_, y)
 
 net = SentimentNet()
 print("Training...")

@@ -34,10 +34,23 @@ def binary_categorical_accuracy(y_, y):
   assert len(y_.shape) == len(y.shape)
   return np.mean(y_ == y)
 
+def binary_categorical_metrics(y_, y):
+  assert len(y_.shape) == len(y.shape)
+  accuracy = np.mean(y_ == y)
+
+  true_positives = np.dot(y_, y)
+  false_positives = np.dot(y_, 1-y)
+  false_negatives = np.dot(1-y_, y)
+
+  precision = true_positives / (true_positives + false_positives)
+  recall = true_positives / (true_positives + false_negatives)
+  f1 = 2 * precision * recall / (precision + recall)
+  return {'accuracy': accuracy, 'F1': f1, 'precision': precision, 'recall': recall}
+
+
 class NeuralNet:
   def __init__(self):
     self.val_and_grad = jit(vmap(value_and_grad(partial(self.__class__.loss, self)), in_axes=(None, 0, 0)))
-    self.vpredict = jit(vmap(partial(self.__class__.predict, self), in_axes=(None, 0)))
     self.vforward = jit(vmap(partial(self.__class__.forward, self), in_axes=(None, 0)))
     self.vloss = jit(vmap(partial(self.__class__.loss, self), in_axes=(None, 0, 0)))
     self.rnd_key = random.PRNGKey(0)
@@ -68,21 +81,24 @@ class NeuralNet:
     print("Ave loss over epoch", (accum_loss / num_batches))
 
   def train(self, num_epochs=10, learning_rate = .1, batch_size = 64):
-    #print('Initial train set accuracy:', self.accuracy(self.vpredict(self.params, self.x_train), self.y_train))
-    print('Initial test set accuracy:', self.accuracy(self.vpredict(self.params, self.x_test), self.y_test))
+    #self.log_eval('Initial train set metrics', self.x_train, self.y_train)
+    self.log_eval('Initial test set metrics', self.x_test, self.y_test)
     for i in range(num_epochs):
       print('epoch', i)
       self.train_epoch(learning_rate, batch_size)
-      #print('Train set accuracy:', self.accuracy(self.vpredict(self.params, self.x_train), self.y_train))
-      print('Test set accuracy:', self.accuracy(self.vpredict(self.params, self.x_test), self.y_test))
+      #self.log_eval('Train set metrics', self.x_train, self.y_train)
+      self.log_eval('Test set metrics', self.x_test, self.y_test)
+
+  def log_eval(self, log_str, x, y):
+    metrics = self.eval_metrics(self.vforward(self.params, x), y)
+    print('[%s] ' % log_str, end='')
+    metrics_msg = ', '.join(['%s: %g' % (k, metrics[k]) for k in metrics])
+    print(metrics_msg)
 
   def load_data(self):
     raise NotImplementedError("abstract")
 
   def init_params(self):
-    raise NotImplementedError("abstract")
-
-  def predict(self, params, x):
     raise NotImplementedError("abstract")
 
   def forward(self, params, x):
@@ -91,7 +107,7 @@ class NeuralNet:
   def loss(self, params, x, y):
     raise NotImplementedError("abstract")
 
-  def accuracy(self, y_, y):
+  def eval_metrics(self, y_, y):
     raise NotImplementedError("abstract")
 
 

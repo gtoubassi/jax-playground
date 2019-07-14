@@ -20,9 +20,6 @@ class MnistNetwork(nn.NeuralNet):
       .0001 * random.normal(self.rnd_key, (10, 100)),
       np.zeros((10,))]
 
-  def predict(self, params, x):
-    return np.eye(10)[np.argmax(self.forward(params, x))]
-    
   def forward(self, params, x):
     W1, b1, W2, b2 = params
     #h1 = nn.sigmoid(np.matmul(W1, x) + b1)
@@ -34,8 +31,9 @@ class MnistNetwork(nn.NeuralNet):
     y_ = self.forward(params, x)
     return nn.cross_entropy_loss(y_, y)
 
-  def accuracy(self, y_, y):
-    return nn.onehot_multi_categorical_accuracy(y_, y)
+  def eval_metrics(self, y_, y):
+    y_chosen = np.eye(10)[np.argmax(y_, axis=1)]
+    return {'accuracy': nn.onehot_multi_categorical_accuracy(y_chosen, y)}
 
 net = MnistNetwork()
 net.train(learning_rate=.5)
