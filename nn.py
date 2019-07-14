@@ -81,17 +81,17 @@ class NeuralNet:
     print("Ave loss over epoch", (accum_loss / num_batches))
 
   def train(self, num_epochs=10, learning_rate = .1, batch_size = 64):
-    #self.log_eval('Initial train set metrics', self.x_train, self.y_train)
-    self.log_eval('Initial test set metrics', self.x_test, self.y_test)
+    #self.log_eval('Initial train set', self.x_train, self.y_train)
+    self.log_eval('Initial test set', self.x_test, self.y_test)
     for i in range(num_epochs):
       print('epoch', i)
       self.train_epoch(learning_rate, batch_size)
-      #self.log_eval('Train set metrics', self.x_train, self.y_train)
-      self.log_eval('Test set metrics', self.x_test, self.y_test)
+      #self.log_eval('Train set', self.x_train, self.y_train)
+      self.log_eval('Test set', self.x_test, self.y_test)
 
-  def log_eval(self, log_str, x, y):
+  def log_eval(self, msg, x, y):
     metrics = self.eval_metrics(self.vforward(self.params, x), y)
-    print('[%s] ' % log_str, end='')
+    print('[%s] ' % msg, end='')
     metrics_msg = ', '.join(['%s: %g' % (k, metrics[k]) for k in metrics])
     print(metrics_msg)
 
