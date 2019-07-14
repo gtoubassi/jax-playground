@@ -66,6 +66,7 @@ class NeuralNet:
 
   def train_batch(self, learning_rate, batch_x, batch_y):
     (v, g) = self.accumulate_gradients(batch_x, batch_y)
+    import pdb; pdb.set_trace()
     self.params = [p - g[idx]*learning_rate for idx, p in enumerate(self.params)]
     return v
 

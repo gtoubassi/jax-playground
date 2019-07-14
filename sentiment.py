@@ -6,7 +6,7 @@ import gzip
 from random import Random
 from jax import random
 
-class SentimentNet(nn.NeuralNet):
+class SentimentBase(nn.NeuralNet):
 
   def load_data(self):
     with gzip.GzipFile('data/50k_reviews10k.json.gz', 'r') as fp:
@@ -46,6 +46,15 @@ class SentimentNet(nn.NeuralNet):
             x_all[int(len(reviews)*.9):],
             y_all[int(len(reviews)*.9):])
 
+  def loss(self, params, x, y):
+    y_ = self.forward(params, x)
+    return nn.binary_cross_entropy_loss(y_, y)
+
+  def eval_metrics(self, y_, y):
+    y_ = y_ > .5
+    return nn.binary_categorical_metrics(y_, y)
+
+class SentimentLinear(SentimentBase):
   def init_params(self):
     return [.001 * random.normal(self.rnd_key, (self.vocab_size,)),
       np.zeros((1,))]
@@ -55,15 +64,18 @@ class SentimentNet(nn.NeuralNet):
     # the [0] is to make sure we return a scalar.
     return nn.sigmoid(np.matmul(W1, x) + b1[0])
 
-  def loss(self, params, x, y):
-    y_ = self.forward(params, x)
-    return nn.binary_cross_entropy_loss(y_, y)
+class Sentiment3LayerMLP(SentimentBase):
+  def init_params(self):
+    return [.001 * random.normal(self.rnd_key, (20, self.vocab_size)), np.zeros((20,)),
+            .001 * random.normal(self.rnd_key, (20,)), np.zeros((1,))]
+        
+  def forward(self, params, x):
+    W1, b1, W2, b2 = params
+    # the [0] is to make sure we return a scalar.
+    h1 = np.tanh(np.matmul(W1, x) + b1)
+    return nn.sigmoid(np.matmul(W2, h1) + b2[0])
 
-  def eval_metrics(self, y_, y):
-    y_ = y_ > .5
-    return nn.binary_categorical_metrics(y_, y)
-
-net = SentimentNet()
+net = SentimentLinear()
 print("Training...")
 net.train(num_epochs=10, learning_rate=.1, batch_size=64)
 
