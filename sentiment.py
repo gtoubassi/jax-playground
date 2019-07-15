@@ -75,7 +75,7 @@ class Sentiment3LayerMLP(SentimentBase):
     h1 = np.tanh(np.matmul(W1, x) + b1)
     return nn.sigmoid(np.matmul(W2, h1) + b2[0])
 
-net = SentimentLinear()
+net = Sentiment3LayerMLP(optimizer=nn.GradientDescentOptimizer(learning_rate=.3))
 print("Training...")
-net.train(num_epochs=10, learning_rate=.1, batch_size=64)
+net.train(num_epochs=10, batch_size=64)
 
