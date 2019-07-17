@@ -2,6 +2,16 @@ import jax.numpy as np
 from jax import grad, value_and_grad, jit, vmap
 from jax import random
 from functools import partial
+import gc
+import psutil
+import os
+
+process = psutil.Process(os.getpid())
+def log_mem(msg):
+  if False:
+    rss_mb = process.memory_info().rss/1024/1024
+    vms_mb = process.memory_info().vms/1024/1024  
+    print("%s: vms=%dmb rss=%dmb" % (msg, vms_mb, rss_mb))
 
 def sigmoid(x):
   return 1/(1 + np.exp(-x))
@@ -40,8 +50,7 @@ def binary_categorical_metrics(y_, y):
 
   true_positives = np.dot(y_, y)
   false_positives = np.dot(y_, 1-y)
-  false_negatives = np.dot(1-y_, y)
-
+  false_negatives = np.dot(1-y_, y)  
   precision = true_positives / (true_positives + false_positives)
   recall = true_positives / (true_positives + false_negatives)
   f1 = 2 * precision * recall / (precision + recall)
@@ -53,8 +62,10 @@ class NeuralNet:
     self.val_and_grad = jit(vmap(value_and_grad(partial(self.__class__.loss, self)), in_axes=(None, 0, 0)))
     self.vforward = jit(vmap(partial(self.__class__.forward, self), in_axes=(None, 0)))
     self.vloss = jit(vmap(partial(self.__class__.loss, self), in_axes=(None, 0, 0)))
-    self.rnd_key = random.PRNGKey(0)
+    self.rnd_key = random.PRNGKey(123456)
+    log_mem("InitData Start")
     (self.x_train, self.y_train, self.x_test, self.y_test) = self.load_data()
+    log_mem("InitData End")
     self.params = self.init_params()
     self.optimizer = optimizer
 
@@ -82,20 +93,24 @@ class NeuralNet:
     print("Ave loss over epoch", (accum_loss / num_batches))
 
   def train(self, num_epochs=10, batch_size = 64):
-    
-    # Start with zero momentum
-    self.momentum_g = [np.zeros_like(p) for p in self.params]
-    
     #self.log_eval('Initial train set', self.x_train, self.y_train)
-    self.log_eval('Initial test set', self.x_test, self.y_test)
+    self.log_eval('Initial test set', self.x_test, self.y_test, batch_size)
     for i in range(num_epochs):
       print('epoch', i)
+      log_mem("Train Epoch Start")
       self.train_epoch(batch_size)
       #self.log_eval('Train set', self.x_train, self.y_train)
-      self.log_eval('Test set', self.x_test, self.y_test)
+      self.log_eval('Test set', self.x_test, self.y_test, batch_size)
+    log_mem("Train End")
 
-  def log_eval(self, msg, x, y):
-    metrics = self.eval_metrics(self.vforward(self.params, x), y)
+  def log_eval(self, msg, x, y, batch_size):
+    batch_ys = []
+    for b in range(0, x.shape[0], batch_size):
+      batch_x = x[b:(b + batch_size)]      
+      batch_ys.append(self.vforward(self.params, batch_x))
+
+    y_ = np.concatenate(batch_ys)
+    metrics = self.eval_metrics(y_, y)
     print('[%s] ' % msg, end='')
     metrics_msg = ', '.join(['%s: %g' % (k, metrics[k]) for k in metrics])
     print(metrics_msg)

@@ -1,9 +1,15 @@
 import gzip
 import json
 import re
+import numpy as np
+from random import Random
+
+rand = Random(12345)
+
+stopwords = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that', 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', 'should', 'now'}
 
 reviews = []
-with gzip.GzipFile('reviews_Kindle_Store_5.json.gz', 'r') as fp:
+with gzip.GzipFile('../data/reviews_Kindle_Store_5.json.gz', 'r') as fp:
   for line in fp:
     reviews.append(json.loads(line))
 
@@ -27,9 +33,46 @@ top10k_indices['<UNK>'] = 0
 for r in reviews:
   r['review_indices'] = list(map(lambda w: top10k_indices.get(w, 0), r['reviewText'].split()))
 
-processed_reviews = [(r['review_indices'], r['overall']) for r in reviews]
-with open('all_reviews10k.json', 'w') as fp:
-  json.dump((top10k_indices, processed_reviews), fp)
+reviews = [(r['review_indices'], r['overall']) for r in reviews]
 
-with open('50k_reviews10k.json', 'w') as fp:
-  json.dump((top10k_indices, processed_reviews[0:50000]), fp)
+# Remove 3 star reviews to simplify problem
+reviews = list(filter(lambda r: r[1] != 3.0, reviews))
+
+num_positive = sum(1 for r in reviews if r[1] > 3)
+num_negative = len(reviews) - num_positive
+    
+if False:
+  # Balance out the dataset so we have equal positive/negative
+  assert num_negative < num_positive
+  # sort from negative to positive
+  reviews.sort(key = lambda r:r[1])
+  # grab the least favorable and the most favorable equally
+  reviews = reviews[0:num_negative] + reviews[-num_negative:]
+  num_positive = sum(1 for r in reviews if r[1] > 3)
+  num_negative = len(reviews) - num_positive
+
+print("Total of %d reviews (%d%% positive)" % (len(reviews), num_positive * 100 / len(reviews)))
+
+rand.shuffle(reviews)
+vocab_size = len(top10k_indices)
+ident_topk = np.eye(vocab_size)
+# Use uint8 for memory efficiency.  When it gets multiplied it will get casted up
+x_all = np.zeros((len(reviews), vocab_size), dtype=np.uint8)
+# Since y_all is small, we keep it at a float32 since it can be error prone to manipulate without casting (it hit me)
+y_all = np.zeros((len(reviews),), dtype=np.float32)
+for i, r in enumerate(reviews):
+  for w in r[0]:
+    x_all[i, w] = 1
+  # Make it a binary classification (positive/negative review)
+  y_all[i] = 1 if r[1] > 3 else 0
+
+
+for config in [('all', int(len(reviews)*.9), len(reviews)), ('200k', int(200000*.9), 200000), ('100k', int(100000*.9), 100000), ('50k', int(50000*.9), 50000)]:
+  filename = config[0] + '_reviews_binary_10k_vocab.npz'
+  print("Saving %s" % filename)
+  np.savez_compressed(filename,
+                      vocab=top10k_indices,
+                      x_train=x_all[0:config[1]],
+                      y_train=y_all[0:config[1]],
+                      x_test=x_all[config[1]:config[2]],
+                      y_test=y_all[config[1]:config[2]])

@@ -1,4 +1,6 @@
 __pycache__
 data/all_reviews10k.json.gz
 data/reviews_Kindle_Store_5.json.gz
+data/200k_reviews_binary_10k_vocab.npz
+data/all_reviews_binary_10k_vocab.npz
 

@@ -1,50 +1,29 @@
 import nn
 import jax.numpy as np
+from jax import random
 import numpy as onp
 import json
 import gzip
 from random import Random
-from jax import random
+import time
 
+class SentimentDataset:
+  def __init__(self):
+    npz = np.load('data/100k_reviews_binary_10k_vocab.npz', allow_pickle=True)
+    num_reviews = npz['x_train'].shape[0] + npz['x_test'].shape[0]
+    print("Number of reviews: %d,  vocab size: %d" % (num_reviews, npz['x_train'].shape[1]))    
+    self.data = (npz['x_train'], npz['y_train'], npz['x_test'], npz['y_test'])
+  
 class SentimentBase(nn.NeuralNet):
 
+  def set_dataset(self, dataset):
+    self.dataset = dataset
+
   def load_data(self):
-    with gzip.GzipFile('data/50k_reviews10k.json.gz', 'r') as fp:
-      topk, reviews = json.load(fp)
+    return dataset.data
 
-    # Remove 3 star reviews to simplify problem
-    reviews = list(filter(lambda r: r[1] != 3.0, reviews))
-
-    num_positive = sum(1 for r in reviews if r[1] > 3)
-    num_negative = len(reviews) - num_positive
-    
-    if False:
-      # Balance out the dataset so we have equal positive/negative
-      assert num_negative < num_positive
-      # sort from negative to positive
-      reviews.sort(key = lambda r:r[1])
-      # grab the least favorable and the most favorable equally
-      reviews = reviews[0:num_negative] + reviews[-num_negative:]
-      num_positive = sum(1 for r in reviews if r[1] > 3)
-      num_negative = len(reviews) - num_positive
-
-    print("Total of %d reviews (%d%% positive)" % (len(reviews), num_positive * 100 / len(reviews)))
-
-    Random(12345).shuffle(reviews)
-    self.vocab_size = len(topk)
-    ident_topk = np.eye(self.vocab_size)
-    x_all = onp.zeros((len(reviews), self.vocab_size))
-    y_all = onp.zeros((len(reviews),))
-    for i, r in enumerate(reviews):
-      for w in r[0]:
-        x_all[i, w] = 1
-      # Make it a binary classification (positive/negative review)
-      y_all[i] = 1.0 if r[1] > 3 else 0.0
-  
-    return (x_all[0:int(len(reviews)*.9)],
-            y_all[0:int(len(reviews)*.9)],
-            x_all[int(len(reviews)*.9):],
-            y_all[int(len(reviews)*.9):])
+  def vocab_size(self):
+    return self.x_train.shape[1]
 
   def loss(self, params, x, y):
     y_ = self.forward(params, x)
@@ -56,7 +35,7 @@ class SentimentBase(nn.NeuralNet):
 
 class SentimentLinear(SentimentBase):
   def init_params(self):
-    return [.001 * random.normal(self.rnd_key, (self.vocab_size,)),
+    return [.001 * random.normal(self.rnd_key, (self.vocab_size(),)),
       np.zeros((1,))]
         
   def forward(self, params, x):
@@ -66,7 +45,7 @@ class SentimentLinear(SentimentBase):
 
 class Sentiment3LayerMLP(SentimentBase):
   def init_params(self):
-    return [.001 * random.normal(self.rnd_key, (20, self.vocab_size)), np.zeros((20,)),
+    return [.001 * random.normal(self.rnd_key, (20, self.vocab_size())), np.zeros((20,)),
             .001 * random.normal(self.rnd_key, (20,)), np.zeros((1,))]
         
   def forward(self, params, x):
@@ -75,7 +54,19 @@ class Sentiment3LayerMLP(SentimentBase):
     h1 = np.tanh(np.matmul(W1, x) + b1)
     return nn.sigmoid(np.matmul(W2, h1) + b2[0])
 
-net = Sentiment3LayerMLP(optimizer=nn.GradientDescentOptimizer(learning_rate=.3))
+dataset = SentimentDataset()
+net = SentimentLinear(optimizer=nn.GradientDescentOptimizer(learning_rate=.3))
+net.set_dataset(dataset)
 print("Training...")
 net.train(num_epochs=10, batch_size=64)
+
+#for lr in (.01, .03, .1, .3, 1):
+#  net = Sentiment3LayerMLP(optimizer=nn.GradientDescentOptimizer(learning_rate=lr))
+#  print("Training... (%s) learning_rate = %g" % (type(net).__name__, lr))
+#  net.train(num_epochs=30, batch_size=64)
+
+#for lr in (.01, .03, .1, .3, 1):
+#  net = SentimentLinear(optimizer=nn.GradientDescentOptimizer(learning_rate=lr))
+#  print("Training... (%s) learning_rate = %g" % (type(net).__name__, lr))
+#  net.train(num_epochs=30, batch_size=64)
 
