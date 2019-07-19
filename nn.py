@@ -58,7 +58,7 @@ def binary_categorical_metrics(y_, y):
 
 
 class NeuralNet:
-  def __init__(self, optimizer):
+  def __init__(self):
     self.val_and_grad = jit(vmap(value_and_grad(partial(self.__class__.loss, self)), in_axes=(None, 0, 0)))
     self.vforward = jit(vmap(partial(self.__class__.forward, self), in_axes=(None, 0)))
     self.vloss = jit(vmap(partial(self.__class__.loss, self), in_axes=(None, 0, 0)))
@@ -67,6 +67,8 @@ class NeuralNet:
     (self.x_train, self.y_train, self.x_test, self.y_test) = self.load_data()
     log_mem("InitData End")
     self.params = self.init_params()
+  
+  def set_optimizer(self, optimizer):
     self.optimizer = optimizer
 
   def accumulate_gradients(self, batch_x, batch_y):
@@ -94,14 +96,15 @@ class NeuralNet:
 
   def train(self, num_epochs=10, batch_size = 64):
     #self.log_eval('Initial train set', self.x_train, self.y_train)
-    self.log_eval('Initial test set', self.x_test, self.y_test, batch_size)
+    metrics = self.log_eval('Initial test set', self.x_test, self.y_test, batch_size)
     for i in range(num_epochs):
       print('epoch', i)
       log_mem("Train Epoch Start")
       self.train_epoch(batch_size)
       #self.log_eval('Train set', self.x_train, self.y_train)
-      self.log_eval('Test set', self.x_test, self.y_test, batch_size)
+      metrics = self.log_eval('Test set', self.x_test, self.y_test, batch_size)
     log_mem("Train End")
+    return metrics
 
   def log_eval(self, msg, x, y, batch_size):
     batch_ys = []
@@ -114,6 +117,7 @@ class NeuralNet:
     print('[%s] ' % msg, end='')
     metrics_msg = ', '.join(['%s: %g' % (k, metrics[k]) for k in metrics])
     print(metrics_msg)
+    return metrics
 
   def load_data(self):
     raise NotImplementedError("abstract")

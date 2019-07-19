@@ -35,7 +35,8 @@ class MnistNetwork(nn.NeuralNet):
     y_chosen = np.eye(10)[np.argmax(y_, axis=1)]
     return {'accuracy': nn.onehot_multi_categorical_accuracy(y_chosen, y)}
 
-net = MnistNetwork(optimizer=nn.GradientDescentOptimizer(learning_rate=.5))
+net = MnistNetwork()
+net.set_optimizer(nn.GradientDescentOptimizer(learning_rate=.5))
 net.train(num_epochs=10)
 
 
